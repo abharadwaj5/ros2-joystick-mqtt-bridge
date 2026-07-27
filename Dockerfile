@@ -1,4 +1,4 @@
-# ROS 2 side of the remote robot assignment.
+# ROS 2 bridge: containerised build and run.
 #official ROS 2 Jazzy,
 FROM ros:jazzy
 
