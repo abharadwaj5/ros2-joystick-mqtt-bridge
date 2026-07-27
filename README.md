@@ -191,6 +191,14 @@ and a robot-side safety layer that fails to a stop, is the basis of any serious
 remote or supervised operation. What gets built on top of it is left open on
 purpose; the point of this repository is the safe, reusable core.
 
+## Learn more
+
+- [ROS 2](https://docs.ros.org)
+- [MQTT protocol](https://mqtt.org)
+- [Eclipse Mosquitto (MQTT broker)](https://mosquitto.org)
+- [HiveMQ public broker](https://www.hivemq.com/mqtt/public-mqtt-broker/)
+- [Wokwi ESP32 simulator](https://wokwi.com)
+
 ## License
 
 MIT. See LICENSE.
