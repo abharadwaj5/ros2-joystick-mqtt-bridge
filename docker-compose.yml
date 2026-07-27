@@ -1,0 +1,6 @@
+services:
+  bridge:
+    build: .
+    container_name: remote_robot_bridge
+    tty: true
+    restart: unless-stopped
