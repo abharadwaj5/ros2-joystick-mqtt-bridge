@@ -92,21 +92,16 @@ this software, the network, or the broker.
                           (joy_operator.py drives; joy_monitor.py is a display)
     operator_esp32/       Wokwi ESP32 operator (sketch.ino, diagram.json)
     ros2_ws/src/remote_robot_bridge/   the C++ bridge node
-    Dockerfile, docker-compose.yml     containerised bridge
 
 ## 1. Build the bridge
 
-Native (needed for the turtlesim demo, since a container cannot see host DDS):
+Build and run the bridge:
 
     sudo apt install -y libmosquitto-dev nlohmann-json3-dev
     cd ros2_ws
     colcon build
     source install/setup.bash
     ros2 run remote_robot_bridge mqtt_bridge
-
-Or containerised:
-
-    docker compose build && docker compose up
 
 ## 2. Operator A: physical joystick
 
