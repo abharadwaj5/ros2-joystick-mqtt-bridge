@@ -1,4 +1,12 @@
-//Sketch ESP32 - MQTT - ROS
+// Copyright 2026 Abhay Bharadwaj
+// Licensed under the MIT License. See LICENSE file in the project root.
+
+// ESP32 operator device (simulated in Wokwi).
+// Reads two potentiometers as the joystick axes and a button as the deadman,
+// then publishes the same command and heartbeat JSON over MQTT that the
+// physical joystick operator sends. The robot-side bridge treats both
+// operators identically. An LED lights only while the robot confirms remote
+// control, driven by the state message coming back.
 
 #include <WiFi.h>
 #include <PubSubClient.h>

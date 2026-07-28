@@ -1,3 +1,6 @@
+#Copyright 2026 Abhay Bharadwaj
+#Licensed under the MIT License. See LICENSE file in the project root.
+
 #!/usr/bin/env python3
 # Physical-joystick operator device. Reads /joy from the ROS joy node and
 # publishes command + heartbeat JSON over MQTT, the same contract the ESP32

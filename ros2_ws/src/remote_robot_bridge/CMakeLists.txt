@@ -12,14 +12,15 @@ find_package(geometry_msgs REQUIRED)
 
 if(BUILD_TESTING)
   find_package(ament_lint_auto REQUIRED)
-  # the following line skips the linter which checks for copyrights
-  # comment the line when a copyright and license is added to all source files
   set(ament_cmake_copyright_FOUND TRUE)
-  # the following line skips cpplint (only works in a git repo)
-  # comment the line when this package is in a git repo and when
-  # a copyright and license is added to all source files
   set(ament_cmake_cpplint_FOUND TRUE)
+  set(ament_cmake_uncrustify_FOUND TRUE)
   ament_lint_auto_find_test_dependencies()
+
+  find_package(ament_cmake_gtest REQUIRED)
+  ament_add_gtest(test_fallback_logic test/test_fallback_logic.cpp)
+  target_include_directories(test_fallback_logic PUBLIC
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>)
 endif()
 
 find_package(ament_cmake REQUIRED)
@@ -29,6 +30,9 @@ find_package(nlohmann_json REQUIRED)
 # find_package(my_robotthinker_interfaces REQUIRED)
 
 add_executable(mqtt_bridge src/mqtt_bridge_node.cpp)
+target_include_directories(mqtt_bridge PUBLIC
+  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+  $<INSTALL_INTERFACE:include>)
 ament_target_dependencies(mqtt_bridge rclcpp geometry_msgs)
 target_link_libraries(mqtt_bridge mosquitto nlohmann_json::nlohmann_json)
 
@@ -36,6 +40,6 @@ target_link_libraries(mqtt_bridge mosquitto nlohmann_json::nlohmann_json)
 install(TARGETS
   mqtt_bridge
   DESTINATION lib/${PROJECT_NAME}
-)   
+)
 
 ament_package()

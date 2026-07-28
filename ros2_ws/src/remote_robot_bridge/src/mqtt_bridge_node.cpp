@@ -1,3 +1,6 @@
+// Copyright 2026 Abhay Bharadwaj
+// Licensed under the MIT License. See LICENSE file in the project root.
+
 #include <mosquitto.h>
 #include <string.h>
 #include <chrono>
@@ -7,6 +10,7 @@
 #include <algorithm>
 #include <atomic>
 #include <unistd.h>
+#include "remote_robot_bridge/fallback_logic.hpp"
 
 #include <rclcpp/rclcpp.hpp>
 #include <geometry_msgs/msg/twist.hpp>
@@ -42,81 +46,69 @@ public:
 private:
     void publishTwist()
     {
-        double lin = 0.0, ang = 0.0;
-        bool fallback = true;
-        std::string reason = "ok";              // <-- HERE, outside the block
+        BridgeInputs in;
         const auto now = std::chrono::steady_clock::now();
-        const auto timeout = std::chrono::milliseconds(1000);
+
         {
             std::lock_guard<std::mutex> lock(data_mutex_);
-            auto cmd_age_ = now - last_cmd_time_;
-            auto heartbeat_age_ = now - last_heartbeat_time_;
-
-            if (!connected_) {
-                reason = "mqtt_disconnected";
-            } else if (last_cmd_time_.time_since_epoch().count() == 0) {
-                reason = "no_command_yet";
-            } else if (cmd_age_ > timeout) {
-                reason = "command_old";
-            } else if (heartbeat_age_ > timeout) {
-                reason = "heartbeat_old";
-            } else if (!valid_) {
-                reason = "invalid_command";
-            } else if (!deadman_) {
-                reason = "deadman_is_false";
-            } else {
-                fallback = false;
-                lin = linear_;
-                ang = angular_;
-            }
+            in.connected    = connected_;
+            in.have_command = (last_cmd_time_.time_since_epoch().count() != 0);
+            in.cmd_age_ms   = std::chrono::duration_cast<std::chrono::milliseconds>(
+                                  now - last_cmd_time_).count();
+            in.heartbeat_age_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
+                                  now - last_heartbeat_time_).count();
+            in.valid   = valid_;
+            in.deadman = deadman_;
+            in.linear  = linear_;
+            in.angular = angular_;
         }   // lock released here
-     // clamp because - five conditions satisfies but error values must be filtered 
-        lin = std::clamp(lin, -0.5, 0.5);
-        ang = std::clamp(ang, -1.0, 1.0);
+
+        const BridgeLimits lim{0.5, 1.0, 1000};
+        const BridgeDecision d = decide(in, lim);
 
         RCLCPP_INFO_THROTTLE(get_logger(), *get_clock(), 1000,
             "fallback=%s reason=%s lin=%.2f ang=%.2f",
-            fallback ? "true" : "false", reason.c_str(), lin, ang);
+            d.fallback ? "true" : "false", d.reason.c_str(), d.linear, d.angular);
 
         auto msg = geometry_msgs::msg::Twist();
-        msg.linear.x  = fallback ? 0.0 : lin;
-        msg.angular.z = fallback ? 0.0 : ang;
+        msg.linear.x  = d.linear;
+        msg.angular.z = d.angular;
         pub_->publish(msg);
     }
 // robot state publish
     void publishState()
     {
-        if (!connected_) return;
+        if (!connected_) return;   // nothing to publish to
 
-        bool fallback = true;
-        std::string reason = "ok";
-        int64_t cmd_age_ms = -1;
+        BridgeInputs in;
         const auto now = std::chrono::steady_clock::now();
-        const auto timeout = std::chrono::milliseconds(1000);
 
         {
             std::lock_guard<std::mutex> lock(data_mutex_);
-            auto cmd_age_ = now - last_cmd_time_;
-            auto heartbeat_age_ = now - last_heartbeat_time_;
-
-            if (last_cmd_time_.time_since_epoch().count() == 0) {
-                reason = "no_command_yet";
-            } else {
-                cmd_age_ms = std::chrono::duration_cast<std::chrono::milliseconds>(cmd_age_).count();
-                if (cmd_age_ > timeout)              reason = "command_old";
-                else if (heartbeat_age_ > timeout)   reason = "heartbeat_old";
-                else if (!valid_)                    reason = "invalid_command";
-                else if (!deadman_)                  reason = "deadman_is_false";
-                else                                 fallback = false;
-            }
+            in.connected    = connected_;
+            in.have_command = (last_cmd_time_.time_since_epoch().count() != 0);
+            in.cmd_age_ms   = std::chrono::duration_cast<std::chrono::milliseconds>(
+                                  now - last_cmd_time_).count();
+            in.heartbeat_age_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
+                                  now - last_heartbeat_time_).count();
+            in.valid   = valid_;
+            in.deadman = deadman_;
+            in.linear  = linear_;
+            in.angular = angular_;
         }
 
+        const BridgeLimits lim{0.5, 1.0, 1000};
+        const BridgeDecision d = decide(in, lim);
+
+        // Report -1 for age if no command has ever arrived, matching the old behaviour.
+        int64_t cmd_age_ms = in.have_command ? in.cmd_age_ms : -1;
+
         json s;
-        s["mode"]            = fallback ? "FALLBACK" : "REMOTE_CONTROL";
-        s["fallback_active"] = fallback;
+        s["mode"]            = d.fallback ? "FALLBACK" : "REMOTE_CONTROL";
+        s["fallback_active"] = d.fallback;
         s["last_cmd_age_ms"] = cmd_age_ms;
-        s["reason"]          = reason;
-        std::string payload = s.dump();  //jsoon reverse (object to text)
+        s["reason"]          = d.reason;
+        std::string payload = s.dump();
 
         mosquitto_publish(mosq_, nullptr, "remote_robot/robotthinkit/state",
                           static_cast<int>(payload.size()), payload.data(), 0, false);
@@ -201,18 +193,12 @@ private:
         mosquitto_connect_callback_set(mosq_, &MqttBridgeNode::onConnectStatic);
         mosquitto_disconnect_callback_set(mosq_, &MqttBridgeNode::onDisconnectStatic);
         mosquitto_message_callback_set(mosq_, &MqttBridgeNode::onMessageStatic);
-
     
         mosquitto_connect(mosq_, "broker.hivemq.com", 1883, 60);
-
-       
-        /*mosquitto_subscribe(mosq_, nullptr, "remote_robot/robotthinkit/cmd", 0);
-        mosquitto_subscribe(mosq_, nullptr, "remote_robot/robotthinkit/esp32_heartbeat", 0);*/
 
         // loop MQTT
         mosquitto_loop_start(mosq_);
 
-        //RCLCPP_INFO(get_logger(), "MQTT connected and subscribed");
     }
 
     rclcpp::Publisher<geometry_msgs::msg::Twist>::SharedPtr pub_;

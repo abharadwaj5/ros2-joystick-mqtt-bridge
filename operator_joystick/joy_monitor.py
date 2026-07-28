@@ -1,3 +1,6 @@
+#Copyright 2026 Abhay Bharadwaj
+#Licensed under the MIT License. See LICENSE file in the project root.
+
 #!/usr/bin/env python3
 # Joystick monitor for demo videos. Reads /joy and prints one
 # readable line describing what the operator is doing. No MQTT, no ROS
